@@ -1,0 +1,60 @@
+---
+title: "Google Books NGram"
+subtitle: "Bit by Bit Series"
+output: html_notebook
+---
+
+loading data
+
+```{r}
+library(tidyverse)
+
+# traditional CSV "tab separated" (it's big)
+raw1gram <- readRDS("../../data/ngrams_v1_years.rds")
+
+head(raw1gram)
+```
+
+reading total counts
+
+```{r}
+
+totalCounts <- read_delim("./googlebooks-eng-all-totalcounts-20090715.txt", 
+                          delim="\t", skip=1, col_types = "innn",
+                          col_names=c("year","total.words","total.pages","total.books"))
+
+head(totalCounts)
+```
+
+keeping only years as ngrams
+
+```{r}
+
+years <- raw1gram %>% 
+  filter( ngram %in% 1850:2010 ) %>% 
+  inner_join(totalCounts, by="year") %>% 
+  select(ngram, year, word.count, total.words) %>% 
+  mutate(word.freq = word.count/total.words)
+
+head(years)
+
+```
+
+fig 3A
+
+```{r}
+
+years %>% 
+  # taking some years
+  filter(year>=1850, year <=2000) %>% 
+  # the selected years "1grams"
+  filter(ngram %in% c(1883,1910,1950)) %>% 
+  # plot it
+  ggplot(aes(x=year, y=word.freq, color=ngram)) +
+    geom_line(size=1) +
+    theme_light()
+
+```
+
+
+
