@@ -73,7 +73,8 @@ head(keywords) %>%
 safe_wpTrend <- safely(wp_trend, otherwise = NULL, quiet = T)
 
 # for all keywords
-trends <- keywords$topic_keyword %>% 
+trends <- keywords$wikipedia_articles %>% 
+  str_extract("(?<=wiki/)(.*)") %>% 
   map_df(function(.kw){
     # "...over a 32-month period from the beginning of January 2012 to the end of August 2014..."
     trends_resp <- safe_wpTrend(
@@ -86,14 +87,6 @@ trends <- keywords$topic_keyword %>%
     return(trends_resp$result)
   })
 
-# let's check which keyword's trend we didn't download
-keywords %>% 
-  mutate( article = janitor::make_clean_names(topic_keyword) ) %>% 
-  anti_join(trends, by="article") %>% 
-  select(topic_keyword) %>% 
-  knitr::kable()
-
-
 # "...aggregated Wikipedia article view counts on a monthly basis..."
 terrorism_articles <- trends %>% 
   mutate(date = floor_date(date, "month") ) %>% 
@@ -101,11 +94,12 @@ terrorism_articles <- trends %>%
   summarise( views = sum(views) ) %>% 
    # ... the Snowden revelations in June 2013...
   mutate( trend = if_else(date < ymd("20130601"), "Terrorism Article Trend Pre-June","Terrorism Article Trend Post-June") ) %>% 
+  filter( date < ymd(20140601)) %>% 
   ungroup()
 
 terrorism_articles %>% 
   ggplot(aes(x=date, y=views, color=trend)) +
-    geom_point() +
+    geom_point(size=2.5) +
     # ... the Snowden revelations in June 2013...
     geom_vline(xintercept = ymd("20130515"), color="dark grey", linetype="dashed") +
     geom_smooth(method = "lm", formula = y~x) + 
