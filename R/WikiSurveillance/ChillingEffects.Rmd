@@ -1,0 +1,166 @@
+---
+title: "Chilling Effects: Online Surveillance and Wikipedia Use."
+output: html_notebook
+---
+
+## Abstract
+
+[Penney (2016)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645) explored whether the widespread publicity about NSA/PRISM surveillance (i.e., the Snowden revelations) in June 2013 was associated with a sharp and sudden decrease in traffic to Wikipedia articles on topics that raise privacy concerns. If so, this change in behavior would be
+consistent with a chilling effect resulting from mass surveillance. The approach of Penney (2016) is sometimes called an interrupted time series design, and it is related to the approaches described in section 2.4.3.
+
+To choose the topic keywords, Penney referred to the list used by the US Department of Homeland Security for tracking and monitoring social media. The DHS list categorizes certain search terms into a range of issues, i.e., “Health Concern,” “Infrastructure Security,” and “Terrorism.” For the study group, Penney used the 48 keywords related to “Terrorism” (see appendix [table 8](./keywords_table8.txt)). He then aggregated Wikipedia article view counts on a monthly basis for the corresponding 48 Wikipedia articles over a 32-month period from the beginning of January 2012 to the end of August 2014. To strengthen his argument, he also created several comparison groups by tracking article views on other topics.
+
+Now, we are going to replicate and extend [Penney (2016)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645). All the raw data that you will need for this activity is available from Wikipedia (https://dumps.wikimedia.org/other/pagecounts-raw/). Or we can get it from the R-package wikipediatrend (Meissner and Team 2016).
+
+### Testing `wikipediatrend` package
+
+```{r wikiPackage, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(wikipediatrend)
+library(lubridate)
+
+# download pageviews from R and Python languages
+trend_data <-   wp_trend(
+  page = c("R_(programming_language)","Python_(programming_language)"), 
+  lang = c("en"), 
+  from = now()-years(2),
+  to   = now()
+)
+
+# what we have?
+head(trend_data) %>% 
+  knitr::kable()
+
+# ploting
+trend_data %>% 
+  ggplot(aes(x=date, y=views, color=article)) +
+  geom_line() +
+  theme_light() +
+  theme(legend.position = "bottom") + 
+  ylim(0,25000) + 
+  labs(title="Daily Page Views",subtitle = "Last 2 Years for articles of R and Python in english language")
+  
+
+```
+
+
+### Part A
+
+Read [Penney (2016)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645) and replicate his figure 2, which shows the page views for “Terrorism”-related pages before and after the Snowden revelations. Interpret the findings.
+
+![fig2](./fig2.png)
+
+```{r table8Load}
+
+# loading DHS keywords listed as relating to “terrorism”
+keywords <- read.delim("./keywords_table8.txt") %>% 
+  janitor::clean_names()
+
+# lets see it
+head(keywords) %>% 
+  knitr::kable()
+```
+
+```{r fig2}
+
+# getting wiki trends
+
+# we can call all keywords at once
+# but some keywords aren't return values, 
+# so let's iterate over each one
+
+# making a "safe version", returning NULL instead of an error
+safe_wpTrend <- safely(wp_trend, otherwise = NULL, quiet = T)
+
+# for all keywords
+trends <- keywords$topic_keyword %>% 
+  map_df(function(.kw){
+    # "...over a 32-month period from the beginning of January 2012 to the end of August 2014..."
+    trends_resp <- safe_wpTrend(
+      page = .kw, 
+      lang = c("en"), 
+      from = "2012-01-01",
+      to   = "2014-08-31"
+    )
+    # will return NULL inst
+    return(trends_resp$result)
+  })
+
+# let's check which keyword's trend we didn't download
+keywords %>% 
+  mutate( article = janitor::make_clean_names(topic_keyword) ) %>% 
+  anti_join(trends, by="article") %>% 
+  select(topic_keyword) %>% 
+  knitr::kable()
+
+
+# "...aggregated Wikipedia article view counts on a monthly basis..."
+terrorism_articles <- trends %>% 
+  mutate(date = floor_date(date, "month") ) %>% 
+  group_by(date) %>% 
+  summarise( views = sum(views) ) %>% 
+   # ... the Snowden revelations in June 2013...
+  mutate( trend = if_else(date < ymd("20130601"), "Terrorism Article Trend Pre-June","Terrorism Article Trend Post-June") ) %>% 
+  ungroup()
+
+terrorism_articles %>% 
+  ggplot(aes(x=date, y=views, color=trend)) +
+    geom_point() +
+    # ... the Snowden revelations in June 2013...
+    geom_vline(xintercept = ymd("20130515"), color="dark grey", linetype="dashed") +
+    geom_smooth(method = "lm", formula = y~x) + 
+    theme_minimal() +
+    labs(title="Pre and After June 13 Articles Trends", subtitle="Terrorism related keywords")
+
+```
+Well, this is not the same in the article, because we can't retrieve the trends for 9 "terrorism-related" keywords.
+
+### Part B
+
+Next, replicate figure 4A, which compares the study group (“Terrorism”-related articles) with a comparator group using keywords categorized under “DHS & Other Agencies” from the DHS list (see appendix [table 10](./keywords_table10.txt) and footnote 139). Interpret the findings.
+
+![fig 4A](./fig4a.png)
+
+```{r domesticLoading}
+
+# load table 10
+comp_table <- read.delim("./keywords_table10.txt") %>% 
+  janitor::clean_names()
+
+# lets see
+head(comp_table) %>% 
+  knitr::kable()
+
+# get the trends
+comp_trends <- comp_table$wikipedia_articles %>% 
+  str_extract("(wiki\\/)([\\w\\(\\-\\.)]+)") %>% 
+  str_remove("wiki/") %>% 
+  str_to_lower() %>% 
+  map_df(function(.kw){
+    # "...over a 32-month period from the beginning of January 2012 to the end of August 2014..."
+    trends_resp <- safe_wpTrend(
+      page = .kw, 
+      lang = c("en"), 
+      from = "2012-01-01",
+      to   = "2014-08-31"
+    )
+    # will return NULL inst
+    return(trends_resp$result)
+  })
+
+# "...aggregated Wikipedia article view counts on a monthly basis..."
+sec_articles <- comp_trends %>% 
+  mutate(date = floor_date(date, "month") ) %>% 
+  group_by(date) %>% 
+  summarise( views = sum(views) ) %>% 
+   # ... the Snowden revelations in June 2013...
+  mutate( trend = if_else(date < ymd("20130601"), "Security Articles Trend Pre-June","Security Articles Trend Post-June") ) %>% 
+  ungroup()
+
+
+```
+
+
+## Reference
+
+Penney, Jonathon. 2016. “Chilling Effects: Online Surveillance and Wikipedia Use.” Berkeley Technology Law Journal 31 (1): 117. doi:10.15779/Z38SS13. - https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645
