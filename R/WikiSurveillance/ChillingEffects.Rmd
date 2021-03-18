@@ -169,7 +169,7 @@ From Jesse Lecy and Federica Fusi's [Interrupted Time Series](https://ds4ps.org/
 
 In mathematical terms, it means that the time series equation includes four key coefficients:
 
-$$Y=b0+b1T+b2D+b3P+e$$
+$$Y=b_0+b_1T+b_2D+b_3P+e$$
 
 Where:
 * $Y$ is the outcome variable;
@@ -223,6 +223,63 @@ summary(mod1)
 
 We can see the significant drop in the moment of the event (D) and also a change in the trend after (P compared to T).
 
+## Statistical Model: Control Group
+
+Yet from Jesse Lecy and Federica Fusi's [Interrupted Time Series](https://ds4ps.org/pe4ps-textbook/docs/p-020-time-series.html#validity-threats-control-groups-and-multiple-time-series)
+
+A time series are also subject to threats to internal validity, such as:
+
+* Another event occurred at the same time of the intervention and cause the immediate and sustained effect that we observe;
+* Selection processes, as only some individuals are affected by the policy intervention.
+
+To address these issues, you can:
+
+* Use as a control a group that is not subject to the intervention (e.g., students who do not attend the well being class)
+
+This design makes sure that the observed effect is the result of the policy intervention. The data will have two observations per each point in time and will include a dummy variable to differentiate the treatment (=1) and the control (=0). The model has a similar structure but (1) we will include a dummy variable that indicates the treatment and the control group and (2) we will interact the group dummy variable with all 3 time serie coefficients to see if there is a statistically significant difference across the 2 groups.
+
+You can see this in the following equation, where $G$ is a dummy indicating treatment and control group.
+
+$$Y=b_0+b_1∗T+b_2∗D+b_3∗P+b_4∗G+b_5∗G∗T+b_6∗G∗D+b_7∗G∗P$$
+
+```{r}
+
+regr_control <- comp_trends %>% 
+  filter( views > 0 ) %>%
+  mutate( date = floor_date(date, unit = "month")) %>% 
+  group_by( date ) %>% 
+  summarise( views = sum(views) ) %>% 
+  ungroup() %>% 
+  mutate(
+    T = row_number(),
+    D = if_else(T<=18,0,1), # 18 is 2013-06-01
+    P = if_else(T<=18,0,T-18)
+  ) %>% 
+  rename( Y=views ) %>% 
+  mutate( G=0 ) %>% 
+  bind_rows( mutate(regr_data, G=1 ))
+
+regr_control %>% 
+  filter( T>14, T<=22) %>%
+  arrange(T,D,G,P) %>% 
+  knitr::kable()
+
+
+```
+
+
+```{r}
+
+mod2 <- lm( Y ~ T + D + P + G + G*T + G*D + G*P, data=regr_control )
+
+summary(mod2)
+```
+
+To interpret the coefficients you need to remember that the reference group is the treatment group (=1). The Group dummy $b_4$ (coef $G$) indicates the difference between the treatment and the control group. $b_5$ (coef $T:G$) represents the slope difference between the intervention and control group in the pre-intervention period. $b_6$ (coef $D:G$) represents the difference between the control and intervention group associated with the intervention. $b_7$ (coef $P:G$) represents the difference between the sustained effect of the control and intervention group after the intervention.
+
+
 ## Reference
 
-Penney, Jonathon. 2016. “Chilling Effects: Online Surveillance and Wikipedia Use.” Berkeley Technology Law Journal 31 (1): 117. doi:10.15779/Z38SS13. - https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645
+* Penney, Jonathon. 2016. “Chilling Effects: Online Surveillance and Wikipedia Use.” Berkeley Technology Law Journal 31 (1): 117. doi:10.15779/Z38SS13. - https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645
+
+* Jesse Lecy and Federica Fusi. "Foundations of Program Evaluation: Regression Tools for Impact Analysis" - https://ds4ps.org/pe4ps-textbook/docs/index.html
