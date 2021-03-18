@@ -23,7 +23,7 @@ Abu Sayyaf	http://en.wikipedia.org/wiki/Abu_Sayyaf	2.02	1.96	1.99	2.57
 Hamas	http://en.wikipedia.org/wiki/hamas	1.90	1.93	1.97	2.49
 FARC	http://en.wikipedia.org/wiki/FARC	1.83	1.88	1.90	2.46
 Irish Republican Army	http://en.wikipedia.org/wiki/Irish_Republican_Army	1.62	1.77	1.83	2.24
-Euskadi ta Askatasuna	http://en.wikipedia.org/w/Euskadi_ta_Askatasuna	1.86	1.88	1.88	2.43
+Euskadi ta Askatasuna	http://en.wikipedia.org/wiki/Euskadi_ta_Askatasuna	1.86	1.88	1.88	2.43
 Hezbollah	http://en.wikipedia.org/wiki/hezbollah	1.86	1.90	1.96	2.46
 Tamil Tigers	http://en.wikipedia.org/wiki/Tamil_Tigers	1.76	1.86	1.87	2.39
 PLO	http://en.wikipedia.org/wiki/Palestine_Liberation_Organization	1.77	1.87	1.91	2.42

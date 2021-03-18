@@ -5,8 +5,7 @@ output: html_notebook
 
 ## Abstract
 
-[Penney (2016)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645) explored whether the widespread publicity about NSA/PRISM surveillance (i.e., the Snowden revelations) in June 2013 was associated with a sharp and sudden decrease in traffic to Wikipedia articles on topics that raise privacy concerns. If so, this change in behavior would be
-consistent with a chilling effect resulting from mass surveillance. The approach of Penney (2016) is sometimes called an interrupted time series design, and it is related to the approaches described in section 2.4.3.
+[Penney (2016)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2769645) explored whether the widespread publicity about NSA/PRISM surveillance (i.e., the Snowden revelations) in June 2013 was associated with a sharp and sudden decrease in traffic to Wikipedia articles on topics that raise privacy concerns. If so, this change in behavior would be consistent with a chilling effect resulting from mass surveillance. The approach of Penney (2016) is sometimes called an [interrupted time series design](https://ds4ps.org/pe4ps-textbook/docs/p-020-time-series.html), and it is related to the approaches described in section 2.4.3.
 
 To choose the topic keywords, Penney referred to the list used by the US Department of Homeland Security for tracking and monitoring social media. The DHS list categorizes certain search terms into a range of issues, i.e., “Health Concern,” “Infrastructure Security,” and “Terrorism.” For the study group, Penney used the 48 keywords related to “Terrorism” (see appendix [table 8](./keywords_table8.txt)). He then aggregated Wikipedia article view counts on a monthly basis for the corresponding 48 Wikipedia articles over a 32-month period from the beginning of January 2012 to the end of August 2014. To strengthen his argument, he also created several comparison groups by tracking article views on other topics.
 
@@ -81,14 +80,15 @@ trends <- keywords$wikipedia_articles %>%
       page = .kw, 
       lang = c("en"), 
       from = "2012-01-01",
-      to   = "2014-08-31"
+      to   = "2014-06-30"
     )
     # will return NULL inst
     return(trends_resp$result)
-  })
+  }) 
 
 # "...aggregated Wikipedia article view counts on a monthly basis..."
 terrorism_articles <- trends %>% 
+  filter( views > 0) %>% 
   mutate(date = floor_date(date, "month") ) %>% 
   group_by(date) %>% 
   summarise( views = sum(views) ) %>% 
@@ -101,13 +101,14 @@ terrorism_articles %>%
   ggplot(aes(x=date, y=views, color=trend)) +
     geom_point(size=2.5) +
     # ... the Snowden revelations in June 2013...
-    geom_vline(xintercept = ymd("20130515"), color="dark grey", linetype="dashed") +
+    geom_vline(xintercept = ymd("20130515"), color="dark grey", linetype="dashed", size=1) +
     geom_smooth(method = "lm", formula = y~x) + 
     theme_minimal() +
+    theme( legend.position = "bottom") +
     labs(title="Pre and After June 13 Articles Trends", subtitle="Terrorism related keywords")
 
 ```
-Well, this is not the same in the article, because we can't retrieve the trends for 9 "terrorism-related" keywords.
+
 
 ### Part B
 
@@ -127,8 +128,7 @@ head(comp_table) %>%
 
 # get the trends
 comp_trends <- comp_table$wikipedia_articles %>% 
-  str_extract("(wiki\\/)([\\w\\(\\-\\.)]+)") %>% 
-  str_remove("wiki/") %>% 
+  str_extract("(?<=wiki/)(.*)") %>% 
   str_to_lower() %>% 
   map_df(function(.kw){
     # "...over a 32-month period from the beginning of January 2012 to the end of August 2014..."
@@ -136,7 +136,7 @@ comp_trends <- comp_table$wikipedia_articles %>%
       page = .kw, 
       lang = c("en"), 
       from = "2012-01-01",
-      to   = "2014-08-31"
+      to   = "2014-06-30"
     )
     # will return NULL inst
     return(trends_resp$result)
@@ -144,6 +144,7 @@ comp_trends <- comp_table$wikipedia_articles %>%
 
 # "...aggregated Wikipedia article view counts on a monthly basis..."
 sec_articles <- comp_trends %>% 
+  filter( views > 0 ) %>% 
   mutate(date = floor_date(date, "month") ) %>% 
   group_by(date) %>% 
   summarise( views = sum(views) ) %>% 
@@ -151,9 +152,76 @@ sec_articles <- comp_trends %>%
   mutate( trend = if_else(date < ymd("20130601"), "Security Articles Trend Pre-June","Security Articles Trend Post-June") ) %>% 
   ungroup()
 
+sec_articles %>% 
+  bind_rows(terrorism_articles) %>% 
+  ggplot(aes(x=date, y=views, color=trend)) +
+    geom_point(size=2) +
+    geom_vline(xintercept = ymd("20130515"), color="dark grey", linetype="dashed", size=1) +
+    geom_smooth(method = "lm", formula = y~x) + 
+    theme_minimal() +
+    theme( legend.position = "bottom" )
+```
+## Extra: The Statistical Model
 
+From Jesse Lecy and Federica Fusi's [Interrupted Time Series](https://ds4ps.org/pe4ps-textbook/docs/p-020-time-series.html#the-statistical-model) we have the following scenario:
+
+![](./Picture3.4.png)
+
+In mathematical terms, it means that the time series equation includes four key coefficients:
+
+$$Y=b0+b1T+b2D+b3P+e$$
+
+Where:
+* $Y$ is the outcome variable;
+* $T$ is a continuous variable which indicates the time (e.g., days, months, years…) passed from the start of the observational period;
+* $D$ is a dummy variable indicating observation collected before (=0) or after (=1) the policy intervention;
+* $P$ is a continuous variable indicating time passed since the intervention has occured (before intervention has occured P is equal to 0).
+
+To model this, We would to have a dataset with this format:
+
+![](./Picture5.png)
+
+So, let's build ours
+
+
+```{r}
+
+regr_data <- trends %>% 
+  filter( views > 0 ) %>%
+  mutate( date = floor_date(date, unit = "month")) %>% 
+  group_by( date ) %>% 
+  summarise( views = sum(views) ) %>% 
+  ungroup() %>% 
+  mutate(
+    T = row_number(),
+    D = if_else(T<=18,0,1), # 18 is 2013-06-01
+    P = if_else(T<=18,0,T-18)
+  ) %>% 
+  rename( Y=views ) # just to make equal to the model
+  
+regr_data %>% 
+  filter( T>14, T<=22) %>% 
+  knitr::kable()
 ```
 
+```{r}
+
+mod1 <- lm( Y ~ T + D + P, data=regr_data )
+
+regr_data %>% 
+  mutate( pred = predict(mod1) ) %>% 
+  ggplot(aes(x=date)) +
+  geom_point(aes(y=Y)) +
+  geom_line(aes(y=pred)) +
+  geom_vline(xintercept = ymd(20130615), linetype="dashed", size=1) +
+  theme_minimal()
+
+```
+```{r}
+summary(mod1)
+```
+
+We can see the significant drop in the moment of the event (D) and also a change in the trend after (P compared to T).
 
 ## Reference
 
