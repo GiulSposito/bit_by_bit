@@ -56,5 +56,73 @@ years %>%
 
 ```
 
+Vamos tentar refazer o decaimento exponencial dos livros achando a meia vida, mas desta vez vamos fazer estatisticamente melhor.
+
+1o fazer o "slice" a partir do pico para cada ano
+
+```{r}
+
+# para cada ngram, acha o pico
+peaks <- years %>% 
+  # remove "referencias passadas"
+  filter( year >= as.integer(ngram) ) %>% 
+  group_by(ngram) %>% 
+  filter( word.freq == max(word.freq) ) %>% 
+  select(ngram, max.year=year, max.freq=word.freq) %>% 
+  ungroup()
+
+head(peaks)
+
+decay.data <- years %>% 
+  inner_join(peaks, by="ngram") %>% 
+  # remove years before peak %>% 
+  filter( year >= max.year )
+
+head(decay.data)
+
+decay.data %>% 
+  filter( ngram %in% as.character(sample(1850:1980, 10))) %>% 
+  ggplot(aes(x=year, y=word.freq, color=ngram)) +
+  geom_line()+
+  theme_minimal()
+
+```
+
+lets fit a exponential for each year
+
+```{r}
+
+# word.freq = alpha.exp(beta*year) + theta
+calcHalfLife <- function(dt){
+  model <- nls(word.freq ~ SSasymp(year, yf, y0, log_alpha), data=dt)
+  k <- exp(coef(model)[3])
+  hl.val <- -log(1/2)/k
+  names(hl.val) <- "half.life"
+  return( hl.val )
+}
+
+sf_calcHalfLIfe <- safely(calcHalfLife, NA, quiet = T)
+
+hl <- decay.data %>% 
+  group_by(ngram) %>% 
+  nest() %>% 
+  arrange(ngram) %>% 
+  mutate( hl_calc = map(data, sf_calcHalfLIfe)) %>% 
+  mutate( half_life = map_dbl(hl_calc, pluck, 1)) %>% 
+  filter( !is.na(half_life) ) %>% 
+  ungroup()
+
+
+hl %>% 
+  mutate(ngram=as.integer(ngram)) %>% 
+  filter(ngram >= 1850, ngram <= 1975 ) %>% 
+  ggplot(aes(x=ngram, y=half_life)) + 
+  geom_point() +
+  ylim(0,100) +
+  theme_minimal()
+
+
+
+```
 
 
