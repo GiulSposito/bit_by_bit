@@ -277,6 +277,25 @@ summary(mod2)
 
 To interpret the coefficients you need to remember that the reference group is the treatment group (=1). The Group dummy $b_4$ (coef $G$) indicates the difference between the treatment and the control group. $b_5$ (coef $T:G$) represents the slope difference between the intervention and control group in the pre-intervention period. $b_6$ (coef $D:G$) represents the difference between the control and intervention group associated with the intervention. $b_7$ (coef $P:G$) represents the difference between the sustained effect of the control and intervention group after the intervention.
 
+```{r}
+regr_data
+
+library(mcp)
+
+regr_data %>% 
+  ggplot(aes(x=T, y=Y)) +
+  geom_point() +
+  theme_minimal()
+
+models <- list( Y ~ 1 + T, ~ 1 + T)
+
+fit_mcp <- mcp(models, data=regr_data, par_x = "T")
+
+plot(fit_mcp)
+
+fit_mcp
+```
+
 
 ## Reference
 
